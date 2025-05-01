@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CSV Analysis Dashboard</title>
+
+  <!-- 样式和脚本 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow-y: auto;
+      font-family: sans-serif;
+    }
+
+    .container {
+      display: flex;
+      height: 90vh;
+    }
+
+    #map {
+      flex: 3.2;
+      height: 100%;
+    }
+
+    .dashboard {
+      flex: 1.8;
+      padding: 30px 20px;
+      overflow-y: hidden;  /* 禁用滚动条 */
+      background-color: #f9f9f9;
+      box-sizing: border-box;
+    }
+
+    #chart-container {
+      height: 400px;
+      padding: 20px;
+      background-color: #ffffff;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    .custom-house-icon {
+      text-align: center;
+      line-height: 1;
+    }
+    
+    canvas {
+     width: 100% !important;
+     height: auto !important;
+    }
+
+    button {
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    font-size: 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: background-color 0.3s ease;
+   }
+    button:hover {
+    background-color: #0056b3;
+   }
+
+  /* ✅ 下拉选择框统一样式 */
+   select {
+   padding: 8px 10px;
+   border-radius: 6px;
+   border: 1px solid #ccc;
+   margin-top: 6px;
+   margin-bottom: 12px;
+   width: 100%;
+  }
+
+/* ✅ 文件上传框 */
+  input[type="file"] {
+  margin-top: 6px;
+  margin-bottom: 12px;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background-color: #f8f8f8;
+ }
+
+ /* ✅ 新增统一按钮样式 */
+  input[type="file"]::file-selector-button {
+  background-color: #00d9ff;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 10px;
+  transition: background-color 0.3s ease;
+  }
+
+  input[type="file"]::file-selector-button:hover {
+  background-color: #00d9ff;
+  }
+
+
+  
+  </style>
+</head>
+<body>
+  <header style="background-color: #00008B; color: white; padding: 20px;">
+    <h1 style="margin: 0;">🏙️ Smart Urban Region Analysis Platform</h1>
+    <p style="margin-top: 8px;">This system integrates map data, AI-powered regional comparisons, property price charts, and user data analysis to assist you in making more informed location decisions.</p>
+    <p style="margin-top: 8px;">Please select two regions as instructed, specify your preferences, and click 'Start AI Analysis'. The system will assist you in conducting the analysis. You may refer to the charts and results to refine your evaluation.</p>
+  </header>
+  
+  <!-- 顶部结构：地图和右侧分析面板 -->
+  <div class="container">
+    <div id="map"></div>
+    <div class="dashboard">
+      <h1>CSV Analysis Dashboard</h1>
+      <div class="ai-comparison" style="margin-top: 20px;">
+        <h2>Regional Comparison Analysis (AI)</h2>
+        <p>Select the regions you want to compare:</p>
+      
+        <label>Region 1:
+          <select id="region1-select"></select>
+        </label>
+        <br/>
+        <label>Region 2:
+          <select id="region2-select"></select>
+        </label>
+      
+        <p>Select your preferences:</p>
+        <div id="preferences">
+          <label><input type="checkbox" value="transport"> Transport Accessibility</label><br/>
+          <label><input type="checkbox" value="schools"> Educational Resources</label><br/>
+          <label><input type="checkbox" value="safety"> Social Security Stability</label><br/>
+          <label><input type="checkbox" value="price"> Moderate Housing Prices</label><br/>
+          <label><input type="checkbox" value="green"> Access to Green Spaces</label><br/>
+          <label><input type="checkbox" value="quiet"> Peaceful Environment</label><br/>
+          <label><input type="checkbox" value="job"> Employment Opportunities</label><br/>
+          <label><input type="checkbox" value="medical"> Healthcare Facilities</label><br/>
+          <!-- 上传用户数据集作为 AI 分析参考 -->
+          <!-- 自定义上传按钮区域 -->
+          <label for="customData">Upload Data for Reference（CSV/XLSX）：:</label><br/>
+          <input type="file" id="customData" accept=".csv,.xlsx" style="display: none;" onchange="updateFileName()" />
+
+          <!-- 自定义按钮和带边框的文件名框 -->
+          <button id="uploadBtn" onclick="document.getElementById('customData').click();" style="
+            background-color: #13a1e3;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 6px;
+            font-size: 14px;
+          ">Choose File</button>
+
+          <span id="fileName" style="
+            display: inline-block;
+            margin-left: 12px;
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background-color: #f9f9f9;
+            color: #333;
+            font-size: 13px;
+            min-width: 160px;
+          ">No file selected</span>
+
+        </div>
+      
+        <button onclick="compareRegions()">Start AI Analysis</button>
+      
+        
+
+        
+          
+      </div>
+      
+      <script>
+      // 初始化区域列表
+      fetch('/static/data/nsw_cleaned_boundaries.geojson')
+        .then(res => res.json())
+        .then(data => {
+          const region1 = document.getElementById('region1-select');
+          const region2 = document.getElementById('region2-select');
+          data.features.forEach(f => {
+            const name = f.properties.name;
+            const opt1 = document.createElement('option');
+            opt1.value = name; opt1.text = name;
+            const opt2 = opt1.cloneNode(true);
+            region1.appendChild(opt1);
+            region2.appendChild(opt2);
+          });
+        });
+      
+      // 分析方法
+      function compareRegions() {
+        const r1 = document.getElementById('region1-select').value;
+        const r2 = document.getElementById('region2-select').value;
+        const prefs = Array.from(document.querySelectorAll('#preferences input:checked')).map(i => i.value);
+      
+        fetch('/compare_regions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ region1: r1, region2: r2, preferences: prefs })
+        })
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('ai-result').innerText = data.result || "AI Analysis Failed";
+        });
+      }
+      </script>
+      
+    </div>
+  </div>
+  
+  <!-- 区域对比分析结果展示区：单独一行 -->
+  <!-- 美化后的 Suburb Analysis 结果卡片 -->
+  <div id="ai-analysis-text" style="
+    margin: 40px 40px 20px 40px;
+    background-color: #ffffff;
+    border-left: 6px solid #00008B;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    padding: 30px;
+    font-size: 15px;
+    line-height: 1.7;
+    color: #333;
+    overflow-x: auto;
+    word-wrap: break-word;
+  ">
+<h3 style="margin-top: 0; color: #00008B;">🏘️ Suburb Comparison Results</h3>
+<div id="ai-result" style="white-space: pre-wrap;"></div>
+</div>
+
+
+
+  <div id="chart-container" style="min-height: 600px; padding-bottom: 60px;">
+    <h3>📈 Property Price Trend Chart (by Type)</h3>
+    <canvas id="chart" height="420" style="margin-bottom: 30px;"></canvas>
+  </div>
+  
+  
+  
+
+  <!-- 美化后的分析结果卡片 -->
+  <div id="ai-file-analysis" style="
+  margin: 40px 40px 20px 40px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  padding: 30px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #333;
+  border-left: 6px solid #00008B;
+  word-wrap: break-word;
+  overflow-x: auto;         /* ✅ 水平滚动容错 */
+">
+
+<h3 style="margin-top: 0; color: #00008B;">📊 AI Analysis Results — <span style="font-weight: 500;">property data(csv)-refresh will be different</span></h3>
+<div id="result" style="white-space: pre-wrap;"></div>
+</div>
+
+
+
+  <!-- 脚本 -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <footer style="background-color: #00008B; color: white; text-align: center; padding: 15px; margin-top: 40px;">
+    <p style="margin: 4px;">📬 Contact us：<a href="mailto:yourname@example.com" style="color: white; text-decoration: underline;">lwj20011002@126.com</a></p>
+    <small>© 2025 Smart Region Insight | Powered by GPT & NSW Open Data</small>
+  </footer>
+  
+</body>
+</html>
